@@ -1,12 +1,28 @@
 """
-Market data module - Binance API integration
+Market data module - Binance/CoinGecko integration
+
+English: Provides real-time crypto prices with a short cache and robust fallback.
+If external APIs fail temporarily, returns the last successful values instead of
+resetting to zeros, ensuring data only updates and never clears.
+
+中文：行情数据模块（Binance/CoinGecko）。
+提供短周期缓存与稳健回退机制；当外部接口临时失败时，返回上一次成功值，
+避免价格被清零，保证数据只会更新不会清零。
 """
 import requests
 import time
 from typing import Dict, List
 
 class MarketDataFetcher:
-    """Fetch real-time market data from Binance API"""
+    """Fetch real-time market data from Binance API (with CoinGecko fallback)
+
+    English: Fetches current prices with a 1-second cache. On failure, falls back
+    to CoinGecko and, if that also fails, returns the last cached successful data
+    rather than zeros to prevent resets.
+
+    中文：以 1 秒缓存获取当前价格。失败时回退至 CoinGecko；若仍失败，
+    优先返回最近一次成功缓存的数据而非零值，防止数据被清零。
+    """
     
     def __init__(self):
         self.binance_base_url = "https://api.binance.com/api/v3"
@@ -34,10 +50,20 @@ class MarketDataFetcher:
         
         self._cache = {}
         self._cache_time = {}
-        self._cache_duration = 5  # Cache for 5 seconds
+        self._last_prices = {}
+        self._cache_duration = 1  # Cache for 1 second to meet 1Hz updates
     
     def get_current_prices(self, coins: List[str]) -> Dict[str, float]:
-        """Get current prices from Binance API"""
+        """Get current prices with 1s cache and resilient fallback
+
+        English: Tries Binance first. If Binance fails, tries CoinGecko.
+        If both fail or return empty values, serves last successful cached
+        prices to avoid clearing to zero.
+
+        中文：优先使用 Binance；失败则使用 CoinGecko。
+        若两者都失败或返回空数据，则返回最近一次成功缓存的结果，
+        避免清零。
+        """
         # Check cache
         cache_key = 'prices_' + '_'.join(sorted(coins))
         if cache_key in self._cache:
@@ -74,16 +100,38 @@ class MarketDataFetcher:
                             }
                             break
             
-            # Update cache
+            # If some coins are missing from Binance response, try to fill from last cache
+            for coin in coins:
+                if coin not in prices:
+                    last = self._cache.get(cache_key, {}).get(coin)
+                    if last:
+                        prices[coin] = last
+
+            # Update caches
             self._cache[cache_key] = prices
             self._cache_time[cache_key] = time.time()
-            
+            self._last_prices[cache_key] = prices
+
             return prices
-            
+        
         except Exception as e:
             print(f"[ERROR] Binance API failed: {e}")
             # Fallback to CoinGecko
-            return self._get_prices_from_coingecko(coins)
+            fallback = self._get_prices_from_coingecko(coins)
+
+            # If CoinGecko returns valid data, cache and return it
+            if fallback and any(v.get('price', 0) for v in fallback.values()):
+                self._cache[cache_key] = fallback
+                self._cache_time[cache_key] = time.time()
+                self._last_prices[cache_key] = fallback
+                return fallback
+
+            # As a final resort, return last successful cached prices to avoid reset
+            if cache_key in self._cache:
+                return self._cache[cache_key]
+
+            # No cache available (e.g., first run) — return fallback (likely zeros)
+            return fallback
     
     def _get_prices_from_coingecko(self, coins: List[str]) -> Dict[str, float]:
         """Fallback: Fetch prices from CoinGecko"""

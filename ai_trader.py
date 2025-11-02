@@ -1,15 +1,53 @@
+"""
+AI Trader module
+
+English: This module defines the AITrader class which is responsible for
+building prompts, calling the LLM provider via OpenAI-compatible API, and
+parsing the response into structured trading decisions.
+
+中文：该模块定义 AITrader 类，负责构建提示词、通过 OpenAI 兼容 API
+调用大模型，并将模型响应解析为结构化的交易决策。
+"""
+
 import json
 from typing import Dict
 from openai import OpenAI, APIConnectionError, APIError
 
 class AITrader:
+    """
+    English: AITrader encapsulates prompt building, LLM invocation, and
+    response parsing for trading decisions.
+
+    中文：AITrader 封装了提示构建、LLM 调用与响应解析，用于生成交易决策。
+    """
+
     def __init__(self, api_key: str, api_url: str, model_name: str):
+        """
+        English: Initialize the AI trader.
+        - api_key: API key for the provider
+        - api_url: Base URL for the provider (OpenAI-compatible)
+        - model_name: Model identifier
+
+        中文：初始化 AI 交易器。
+        - api_key：提供方的 API 密钥
+        - api_url：OpenAI 兼容的基础地址
+        - model_name：模型名称
+        """
         self.api_key = api_key
         self.api_url = api_url
         self.model_name = model_name
+        # Keep the last raw response from LLM for conversation display
+        # 保存最近一次 LLM 原始响应，用于会话展示
+        self.last_raw_response: str = ""
     
     def make_decision(self, market_state: Dict, portfolio: Dict, 
                      account_info: Dict) -> Dict:
+        """
+        English: Build a prompt from market/portfolio/account info, call the LLM,
+        parse its response, and return structured decisions.
+
+        中文：基于市场/持仓/账户信息构建提示，调用 LLM，解析响应并返回结构化决策。
+        """
         prompt = self._build_prompt(market_state, portfolio, account_info)
         
         response = self._call_llm(prompt)
@@ -82,6 +120,12 @@ Analyze and output JSON only.
         return prompt
     
     def _call_llm(self, prompt: str) -> str:
+        """
+        English: Invoke the LLM with the given prompt and return the raw
+        message content. Also stores the raw content for later use.
+
+        中文：用给定提示调用大模型，返回原始消息内容，并缓存该内容供后续使用。
+        """
         try:
             base_url = self.api_url.rstrip('/')
             if not base_url.endswith('/v1'):
@@ -111,7 +155,11 @@ Analyze and output JSON only.
                 max_tokens=2000
             )
             
-            return response.choices[0].message.content
+            content = response.choices[0].message.content
+            # Cache raw content for conversation display
+            # 缓存原始内容用于会话展示
+            self.last_raw_response = content or ""
+            return content
             
         except APIConnectionError as e:
             error_msg = f"API connection failed: {str(e)}"
@@ -129,6 +177,13 @@ Analyze and output JSON only.
             raise Exception(error_msg)
     
     def _parse_response(self, response: str) -> Dict:
+        """
+        English: Extract JSON content (supporting fenced code blocks) and parse
+        into a Python dict of decisions. Returns {} if parsing fails.
+
+        中文：提取 JSON 内容（支持代码块围栏），解析为 Python 字典的决策。
+        若解析失败则返回 {}。
+        """
         response = response.strip()
         
         if '```json' in response:

@@ -1,9 +1,30 @@
+"""
+Trading engine module
+
+English: Executes trading cycles by fetching market data, querying the AI
+trader for decisions, executing them, and recording portfolio/account history.
+
+中文：交易引擎模块，负责拉取市场数据、调用 AI 交易器生成决策、执行交易，并记录
+持仓与账户历史。
+"""
+
 from datetime import datetime
 from typing import Dict
 import json
 
 class TradingEngine:
+    """
+    English: Coordinates AI decisions and trading execution for a single model.
+
+    中文：协调单一模型的 AI 决策与交易执行。
+    """
+
     def __init__(self, model_id: int, db, market_fetcher, ai_trader, trade_fee_rate: float = 0.001):
+        """
+        English: Initialize engine with dependencies and configuration.
+
+        中文：用依赖与配置初始化交易引擎。
+        """
         self.model_id = model_id
         self.db = db
         self.market_fetcher = market_fetcher
@@ -12,6 +33,13 @@ class TradingEngine:
         self.trade_fee_rate = trade_fee_rate  # 从配置中传入费率
     
     def execute_trading_cycle(self) -> Dict:
+        """
+        English: One full trading cycle: build state, get AI decisions, record
+        conversation (raw response), execute trades, and update account value.
+
+        中文：完成一次交易周期：构建状态、获取 AI 决策、记录会话（原始响应）、
+        执行交易并更新账户价值。
+        """
         try:
             market_state = self._get_market_state()
             
@@ -25,10 +53,13 @@ class TradingEngine:
                 market_state, portfolio, account_info
             )
             
+            # Prefer storing raw LLM content for conversation display; fallback to decisions JSON
+            # 优先保存 LLM 原始文本用于会话展示；若无则回退到决策 JSON
+            raw_response = getattr(self.ai_trader, 'last_raw_response', '')
             self.db.add_conversation(
                 self.model_id,
                 user_prompt=self._format_prompt(market_state, portfolio, account_info),
-                ai_response=json.dumps(decisions, ensure_ascii=False),
+                ai_response=raw_response if raw_response else json.dumps(decisions, ensure_ascii=False),
                 cot_trace=''
             )
             

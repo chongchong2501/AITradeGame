@@ -1,3 +1,13 @@
+/**
+ * Frontend App Module
+ * English: Manages UI refresh cycles and data fetching at 1-second intervals.
+ * 中文：前端应用模块，统一管理每秒刷新与数据获取。
+ */
+/**
+ * TradingApp Class
+ * English: Handles models, market prices rendering, and periodic refresh.
+ * 中文：处理模型管理、行情渲染与定时刷新。
+ */
 class TradingApp {
     constructor() {
         this.currentModelId = null;
@@ -908,10 +918,15 @@ class TradingApp {
         ]);
     }
 
+    /**
+     * Start periodic refresh timers (market: 1s, portfolio: 10s)
+     * English: Refresh market prices every second; portfolio/aggregated every 10 seconds.
+     * 中文：市场行情每秒刷新；组合/汇总每 10 秒刷新，避免账户走势频繁重绘。
+     */
     startRefreshCycles() {
         this.refreshIntervals.market = setInterval(() => {
             this.loadMarketPrices();
-        }, 5000);
+        }, 1000);
 
         this.refreshIntervals.portfolio = setInterval(() => {
             if (this.isAggregatedView || this.currentModelId) {
